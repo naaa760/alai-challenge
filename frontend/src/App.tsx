@@ -1,10 +1,18 @@
-import TldrawComponent from "./TldrawComponent";
+import { TldrawComponent } from "./TldrawComponent";
+import "./index.css";
 
-export default function App() {
+function App() {
   return (
-    <div style={{ position: "fixed", inset: 0 }}>
-      <h1>Tldraw Canvas:</h1>
-      <TldrawComponent />
+    <div className="App" style={{ height: "100vh", width: "100%" }}>
+      <header>
+        <h1>Hub and Spoke Diagram</h1>
+        <p>Add or remove spokes using the buttons in the top right</p>
+      </header>
+      <main style={{ flex: 1 }}>
+        <TldrawComponent />
+      </main>
     </div>
   );
 }
+
+export default App;
