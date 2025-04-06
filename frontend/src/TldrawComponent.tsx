@@ -1,13 +1,14 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Tldraw,
   Editor,
-  TLShape,
   TLShapeId,
   createShapeId,
   TLRecord,
+  StoreListener,
 } from "@tldraw/tldraw";
 import "@tldraw/tldraw/tldraw.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 // Define shape IDs and relationships for tracking
 interface DiagramShapes {
@@ -45,201 +46,7 @@ export const TldrawComponent = () => {
     }
   };
 
-  const handleMount = useCallback(
-    (editor: Editor) => {
-      editorRef.current = editor;
-
-      // Set up event listeners for shape changes
-      editor.store.listen(handleStoreChange);
-
-      drawDiagram(editor, spokeCount);
-    },
-    [spokeCount]
-  );
-
-  // Handle store changes to implement binding behavior
-  const handleStoreChange = (record: TLRecord, source: "user" | "remote") => {
-    if (source !== "user" || !editorRef.current) return;
-
-    const editor = editorRef.current;
-    const shapes = shapesRef.current;
-
-    // Check if a textbox was moved
-    if (record.type === "shape" && shapes.textBoxes.includes(record.id)) {
-      const textBoxId = record.id;
-      const textBoxIndex = shapes.textBoxes.indexOf(textBoxId);
-
-      if (textBoxIndex >= 0) {
-        // Get the corresponding spoke line and endpoint
-        const spokeLineId = shapes.spokeLines[textBoxIndex];
-        const endpointId = shapes.endpoints[textBoxIndex];
-
-        // Get the shapes
-        const textBox = editor.getShape(textBoxId);
-        const spokeLine = editor.getShape(spokeLineId);
-        const endpoint = editor.getShape(endpointId);
-        const hub = editor.getShape(shapes.hubId);
-
-        if (textBox && spokeLine && endpoint && hub) {
-          // Calculate new endpoint position based on textbox position
-          const textBoxCenter = {
-            x: textBox.x + 100, // Half of textbox width
-            y: textBox.y + 35, // Half of textbox height
-          };
-
-          // Update endpoint position
-          editor.updateShape({
-            id: endpointId,
-            type: "geo",
-            x: textBoxCenter.x - 20,
-            y: textBoxCenter.y - 20,
-          });
-
-          // Update spoke line
-          const hubCenter = {
-            x: hub.x + 50, // Half of hub width
-            y: hub.y + 50, // Half of hub height
-          };
-
-          // Update the line to connect hub to new endpoint position
-          editor.updateShape({
-            id: spokeLineId,
-            type: "draw",
-            props: {
-              segments: [
-                {
-                  type: "straight",
-                  points: [
-                    { x: hubCenter.x, y: hubCenter.y },
-                    { x: textBoxCenter.x, y: textBoxCenter.y },
-                  ],
-                },
-              ],
-            },
-          });
-        }
-      }
-    }
-
-    // Check if hub was moved
-    if (record.type === "shape" && record.id === shapes.hubId) {
-      const hub = editor.getShape(shapes.hubId);
-      if (!hub) return;
-
-      const hubCenter = {
-        x: hub.x + 50, // Half of hub width
-        y: hub.y + 50, // Half of hub height
-      };
-
-      // Move all connected elements
-      for (let i = 0; i < shapes.endpoints.length; i++) {
-        const endpointId = shapes.endpoints[i];
-        const spokeLineId = shapes.spokeLines[i];
-        const textBoxId = shapes.textBoxes[i];
-
-        const endpoint = editor.getShape(endpointId);
-        const textBox = editor.getShape(textBoxId);
-
-        if (endpoint && textBox) {
-          // Calculate the vector from old hub position to endpoint
-          const oldHubCenter = {
-            x: record.x + 50,
-            y: record.y + 50,
-          };
-
-          const dx = endpoint.x - oldHubCenter.x;
-          const dy = endpoint.y - oldHubCenter.y;
-
-          // Move endpoint by the same amount hub moved
-          editor.updateShape({
-            id: endpointId,
-            type: "geo",
-            x: hubCenter.x + dx - 20,
-            y: hubCenter.y + dy - 20,
-          });
-
-          // Move textbox by the same amount
-          editor.updateShape({
-            id: textBoxId,
-            type: "geo",
-            x: textBox.x + (hub.x - record.x),
-            y: textBox.y + (hub.y - record.y),
-          });
-
-          // Update spoke line
-          const newEndpointCenter = {
-            x: hubCenter.x + dx,
-            y: hubCenter.y + dy,
-          };
-
-          editor.updateShape({
-            id: spokeLineId,
-            type: "draw",
-            props: {
-              segments: [
-                {
-                  type: "straight",
-                  points: [
-                    { x: hubCenter.x, y: hubCenter.y },
-                    { x: newEndpointCenter.x, y: newEndpointCenter.y },
-                  ],
-                },
-              ],
-            },
-          });
-        }
-      }
-    }
-  };
-
-  // Function to check and prevent collisions between textboxes
-  const preventCollisions = (
-    editor: Editor,
-    textBoxId: TLShapeId,
-    x: number,
-    y: number
-  ) => {
-    const shapes = shapesRef.current;
-    const textBoxWidth = 200;
-    const textBoxHeight = 70;
-
-    // Check for collisions with other textboxes
-    for (const otherId of shapes.textBoxes) {
-      if (otherId === textBoxId) continue;
-
-      const otherBox = editor.getShape(otherId);
-      if (!otherBox) continue;
-
-      // Simple collision detection
-      if (
-        x < otherBox.x + textBoxWidth &&
-        x + textBoxWidth > otherBox.x &&
-        y < otherBox.y + textBoxHeight &&
-        y + textBoxHeight > otherBox.y
-      ) {
-        // Collision detected, adjust position
-        // Move in the direction away from the other box
-        const centerX = x + textBoxWidth / 2;
-        const centerY = y + textBoxHeight / 2;
-        const otherCenterX = otherBox.x + textBoxWidth / 2;
-        const otherCenterY = otherBox.y + textBoxHeight / 2;
-
-        const dx = centerX - otherCenterX;
-        const dy = centerY - otherCenterY;
-
-        // Normalize and apply offset
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const offsetX = (dx / distance) * textBoxWidth;
-        const offsetY = (dy / distance) * textBoxHeight;
-
-        return { x: x + offsetX, y: y + offsetY };
-      }
-    }
-
-    return { x, y };
-  };
-
-  const drawDiagram = (editor: Editor, count: number) => {
+  const drawDiagram = useCallback((editor: Editor, count: number) => {
     try {
       // Clear the canvas
       editor.selectAll();
@@ -248,7 +55,7 @@ export const TldrawComponent = () => {
         editor.deleteShapes(selectedIds);
       }
 
-      // Reset shape tracking
+      // Reset shape tracking with proper TLShapeId types
       shapesRef.current = {
         hubId: createShapeId(),
         spokeLines: [],
@@ -286,7 +93,7 @@ export const TldrawComponent = () => {
           fill: "solid",
           color: "violet",
         },
-      }).id;
+      }).id as unknown as TLShapeId;
 
       // Store hub ID for tracking
       shapesRef.current.hubId = hubId;
@@ -334,7 +141,7 @@ export const TldrawComponent = () => {
             ],
             color: "light-violet",
           },
-        }).id;
+        }).id as unknown as TLShapeId;
 
         // Store spoke line ID
         shapesRef.current.spokeLines.push(spokeLineId);
@@ -351,7 +158,7 @@ export const TldrawComponent = () => {
             fill: "solid",
             color: "blue",
           },
-        }).id;
+        }).id as unknown as TLShapeId;
 
         // Store endpoint ID
         shapesRef.current.endpoints.push(endpointId);
@@ -413,7 +220,7 @@ export const TldrawComponent = () => {
             fill: "solid",
             color: "light-blue",
           },
-        }).id;
+        }).id as unknown as TLShapeId;
 
         // Store text box ID
         shapesRef.current.textBoxes.push(textBoxId);
@@ -426,6 +233,224 @@ export const TldrawComponent = () => {
     } catch (error) {
       console.error("Error creating diagram:", error);
     }
+  }, []);
+
+  const handleMount = useCallback(
+    (editor: Editor) => {
+      editorRef.current = editor;
+
+      // Set up event listeners for shape changes with correct signature
+      editor.store.listen(((
+        record: TLRecord,
+        source: string,
+        _origin: unknown
+      ) => {
+        if (source === "user") {
+          handleStoreChange(record);
+        }
+      }) as unknown as StoreListener<TLRecord>);
+
+      drawDiagram(editor, spokeCount);
+    },
+    [spokeCount, drawDiagram]
+  );
+
+  // Handle store changes to implement binding behavior
+  const handleStoreChange = (record: TLRecord) => {
+    if (!editorRef.current) return;
+
+    const editor = editorRef.current;
+    const shapes = shapesRef.current;
+
+    // Check if this is a shape record and has an id property
+    if ("id" in record) {
+      const recordId = record.id;
+
+      // Check if a textbox was moved
+      if (
+        shapes.textBoxes.some((id) => id.toString() === recordId.toString())
+      ) {
+        const textBoxId = shapes.textBoxes.find(
+          (id) => id.toString() === recordId.toString()
+        );
+
+        if (textBoxId) {
+          const textBoxIndex = shapes.textBoxes.indexOf(textBoxId);
+
+          if (textBoxIndex >= 0) {
+            // Get the corresponding spoke line and endpoint
+            const spokeLineId = shapes.spokeLines[textBoxIndex];
+            const endpointId = shapes.endpoints[textBoxIndex];
+
+            // Get the shapes
+            const textBox = editor.getShape(textBoxId);
+            const spokeLine = editor.getShape(spokeLineId);
+            const endpoint = editor.getShape(endpointId);
+            const hub = editor.getShape(shapes.hubId);
+
+            if (textBox && spokeLine && endpoint && hub) {
+              // Calculate new endpoint position based on textbox position
+              const textBoxCenter = {
+                x: textBox.x + 100, // Half of textbox width
+                y: textBox.y + 35, // Half of textbox height
+              };
+
+              // Update endpoint position
+              editor.updateShape({
+                id: endpointId,
+                type: "geo",
+                x: textBoxCenter.x - 20,
+                y: textBoxCenter.y - 20,
+              });
+
+              // Update spoke line
+              const hubCenter = {
+                x: hub.x + 50, // Half of hub width
+                y: hub.y + 50, // Half of hub height
+              };
+
+              // Update the line to connect hub to new endpoint position
+              editor.updateShape({
+                id: spokeLineId,
+                type: "draw",
+                props: {
+                  segments: [
+                    {
+                      type: "straight",
+                      points: [
+                        { x: hubCenter.x, y: hubCenter.y },
+                        { x: textBoxCenter.x, y: textBoxCenter.y },
+                      ],
+                    },
+                  ],
+                },
+              });
+            }
+          }
+        }
+      }
+
+      // Check if hub was moved
+      if (recordId.toString() === shapes.hubId.toString()) {
+        const hub = editor.getShape(shapes.hubId);
+        if (!hub) return;
+
+        const hubCenter = {
+          x: hub.x + 50,
+          y: hub.y + 50,
+        };
+
+        // Get the previous shape to calculate movement delta
+        const shape = editor.getShape(recordId as unknown as TLShapeId);
+        if (!shape || !("x" in shape) || !("y" in shape)) return;
+
+        // Move all connected elements
+        for (let i = 0; i < shapes.endpoints.length; i++) {
+          const endpointId = shapes.endpoints[i];
+          const spokeLineId = shapes.spokeLines[i];
+          const textBoxId = shapes.textBoxes[i];
+
+          const endpoint = editor.getShape(endpointId);
+          const textBox = editor.getShape(textBoxId);
+
+          if (endpoint && textBox) {
+            // Calculate the vector from old hub position to endpoint
+            const oldHubCenter = {
+              x: shape.x + 50,
+              y: shape.y + 50,
+            };
+
+            const dx = endpoint.x - oldHubCenter.x;
+            const dy = endpoint.y - oldHubCenter.y;
+
+            // Move endpoint by the same amount hub moved
+            editor.updateShape({
+              id: endpointId,
+              type: "geo",
+              x: hubCenter.x + dx - 20,
+              y: hubCenter.y + dy - 20,
+            });
+
+            // Move textbox by the same amount
+            editor.updateShape({
+              id: textBoxId,
+              type: "geo",
+              x: textBox.x + (hub.x - shape.x),
+              y: textBox.y + (hub.y - shape.y),
+            });
+
+            // Update spoke line
+            const newEndpointCenter = {
+              x: hubCenter.x + dx,
+              y: hubCenter.y + dy,
+            };
+
+            editor.updateShape({
+              id: spokeLineId,
+              type: "draw",
+              props: {
+                segments: [
+                  {
+                    type: "straight",
+                    points: [
+                      { x: hubCenter.x, y: hubCenter.y },
+                      { x: newEndpointCenter.x, y: newEndpointCenter.y },
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+        }
+      }
+    }
+  };
+
+  // Function to check and prevent collisions between textboxes
+  const preventCollisions = (
+    editor: Editor,
+    textBoxId: TLShapeId,
+    x: number,
+    y: number
+  ) => {
+    const shapes = shapesRef.current;
+    const textBoxWidth = 200;
+    const textBoxHeight = 70;
+
+    // Check for collisions with other textboxes
+    for (const otherId of shapes.textBoxes) {
+      if (otherId === textBoxId) continue;
+
+      const otherBox = editor.getShape(otherId);
+      if (!otherBox) continue;
+
+      // Simple collision detection
+      if (
+        x < otherBox.x + textBoxWidth &&
+        x + textBoxWidth > otherBox.x &&
+        y < otherBox.y + textBoxHeight &&
+        y + textBoxHeight > otherBox.y
+      ) {
+        // Collision detected, adjust position
+        // Move in the direction away from the other box
+        const centerX = x + textBoxWidth / 2;
+        const centerY = y + textBoxHeight / 2;
+        const otherCenterX = otherBox.x + textBoxWidth / 2;
+        const otherCenterY = otherBox.y + textBoxHeight / 2;
+
+        const dx = centerX - otherCenterX;
+        const dy = centerY - otherCenterY;
+
+        // Normalize and apply offset
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const offsetX = (dx / distance) * textBoxWidth;
+        const offsetY = (dy / distance) * textBoxHeight;
+
+        return { x: x + offsetX, y: y + offsetY };
+      }
+    }
+
+    return { x, y };
   };
 
   return (
