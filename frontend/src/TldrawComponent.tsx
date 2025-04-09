@@ -10,7 +10,6 @@ import {
 import "@tldraw/tldraw/tldraw.css";
 import { useCallback, useRef, useState } from "react";
 
-// Define shape IDs and relationships for tracking
 interface DiagramShapes {
   hubId: TLShapeId;
   spokeLines: TLShapeId[];
@@ -48,14 +47,12 @@ export const TldrawComponent = () => {
 
   const drawDiagram = useCallback((editor: Editor, count: number) => {
     try {
-      // Clear the canvas
       editor.selectAll();
       const selectedIds = editor.getSelectedShapeIds();
       if (selectedIds.length) {
         editor.deleteShapes(selectedIds);
       }
 
-      // Reset shape tracking with proper TLShapeId types
       shapesRef.current = {
         hubId: createShapeId(),
         spokeLines: [],
@@ -63,11 +60,9 @@ export const TldrawComponent = () => {
         textBoxes: [],
       };
 
-      // Set up center coordinates
       const centerX = 500;
       const centerY = 300;
 
-      // Create a background circle for visual interest
       editor.createShape({
         type: "geo",
         x: centerX - 70,
@@ -81,7 +76,6 @@ export const TldrawComponent = () => {
         },
       });
 
-      // Create hub with a more vibrant color
       const hubId = editor.createShape({
         type: "geo",
         x: centerX - 50,
@@ -95,11 +89,9 @@ export const TldrawComponent = () => {
         },
       }).id as unknown as TLShapeId;
 
-      // Store hub ID for tracking
       shapesRef.current.hubId = hubId;
 
-      // Create spokes and endpoints
-      const spokeLength = 200; // Longer spokes for better spacing
+      const spokeLength = 200;
       const angleStep = (2 * Math.PI) / count;
 
       for (let i = 0; i < count; i++) {
@@ -143,10 +135,8 @@ export const TldrawComponent = () => {
           },
         }).id as unknown as TLShapeId;
 
-        // Store spoke line ID
         shapesRef.current.spokeLines.push(spokeLineId);
 
-        // Create endpoint with a different color
         const endpointId = editor.createShape({
           type: "geo",
           x: endX - 20,
@@ -160,7 +150,6 @@ export const TldrawComponent = () => {
           },
         }).id as unknown as TLShapeId;
 
-        // Store endpoint ID
         shapesRef.current.endpoints.push(endpointId);
 
         // Create a smaller inner circle for visual interest
@@ -181,19 +170,15 @@ export const TldrawComponent = () => {
         let textX, textY;
 
         if (angle < Math.PI / 2) {
-          // Top-right quadrant
           textX = endX + 30;
           textY = endY - 60;
         } else if (angle < Math.PI) {
-          // Top-left quadrant
           textX = endX - 230;
           textY = endY - 60;
         } else if (angle < (3 * Math.PI) / 2) {
-          // Bottom-left quadrant
           textX = endX - 230;
           textY = endY + 30;
         } else {
-          // Bottom-right quadrant
           textX = endX + 30;
           textY = endY + 30;
         }
@@ -208,7 +193,6 @@ export const TldrawComponent = () => {
         textX = adjustedPos.x;
         textY = adjustedPos.y;
 
-        // Add text box background with rounded corners
         const textBoxId = editor.createShape({
           type: "geo",
           x: textX,
@@ -222,11 +206,10 @@ export const TldrawComponent = () => {
           },
         }).id as unknown as TLShapeId;
 
-        // Store text box ID
         shapesRef.current.textBoxes.push(textBoxId);
       }
 
-      // Adjust view to show everything
+      // Adjust the view to show everything.
       setTimeout(() => {
         editor.zoomToFit();
       }, 100);
@@ -239,7 +222,6 @@ export const TldrawComponent = () => {
     (editor: Editor) => {
       editorRef.current = editor;
 
-      // Set up event listeners for shape changes with correct signature
       editor.store.listen(((
         record: TLRecord,
         source: string,
@@ -255,18 +237,15 @@ export const TldrawComponent = () => {
     [spokeCount, drawDiagram]
   );
 
-  // Handle store changes to implement binding behavior
   const handleStoreChange = (record: TLRecord) => {
     if (!editorRef.current) return;
 
     const editor = editorRef.current;
     const shapes = shapesRef.current;
 
-    // Check if this is a shape record and has an id property
     if ("id" in record) {
       const recordId = record.id;
 
-      // Check if a textbox was moved
       if (
         shapes.textBoxes.some((id) => id.toString() === recordId.toString())
       ) {
@@ -278,11 +257,9 @@ export const TldrawComponent = () => {
           const textBoxIndex = shapes.textBoxes.indexOf(textBoxId);
 
           if (textBoxIndex >= 0) {
-            // Get the corresponding spoke line and endpoint
             const spokeLineId = shapes.spokeLines[textBoxIndex];
             const endpointId = shapes.endpoints[textBoxIndex];
 
-            // Get the shapes
             const textBox = editor.getShape(textBoxId);
             const spokeLine = editor.getShape(spokeLineId);
             const endpoint = editor.getShape(endpointId);
@@ -291,11 +268,10 @@ export const TldrawComponent = () => {
             if (textBox && spokeLine && endpoint && hub) {
               // Calculate new endpoint position based on textbox position
               const textBoxCenter = {
-                x: textBox.x + 100, // Half of textbox width
-                y: textBox.y + 35, // Half of textbox height
+                x: textBox.x + 100,
+                y: textBox.y + 35,
               };
 
-              // Update endpoint position
               editor.updateShape({
                 id: endpointId,
                 type: "geo",
@@ -303,13 +279,11 @@ export const TldrawComponent = () => {
                 y: textBoxCenter.y - 20,
               });
 
-              // Update spoke line
               const hubCenter = {
-                x: hub.x + 50, // Half of hub width
-                y: hub.y + 50, // Half of hub height
+                x: hub.x + 50,
+                y: hub.y + 50,
               };
 
-              // Update the line to connect hub to new endpoint position
               editor.updateShape({
                 id: spokeLineId,
                 type: "draw",
@@ -330,7 +304,6 @@ export const TldrawComponent = () => {
         }
       }
 
-      // Check if hub was moved
       if (recordId.toString() === shapes.hubId.toString()) {
         const hub = editor.getShape(shapes.hubId);
         if (!hub) return;
@@ -354,7 +327,6 @@ export const TldrawComponent = () => {
           const textBox = editor.getShape(textBoxId);
 
           if (endpoint && textBox) {
-            // Calculate the vector from old hub position to endpoint
             const oldHubCenter = {
               x: shape.x + 50,
               y: shape.y + 50,
@@ -371,7 +343,6 @@ export const TldrawComponent = () => {
               y: hubCenter.y + dy - 20,
             });
 
-            // Move textbox by the same amount
             editor.updateShape({
               id: textBoxId,
               type: "geo",
@@ -379,7 +350,6 @@ export const TldrawComponent = () => {
               y: textBox.y + (hub.y - shape.y),
             });
 
-            // Update spoke line
             const newEndpointCenter = {
               x: hubCenter.x + dx,
               y: hubCenter.y + dy,
@@ -406,7 +376,6 @@ export const TldrawComponent = () => {
     }
   };
 
-  // Function to check and prevent collisions between textboxes
   const preventCollisions = (
     editor: Editor,
     textBoxId: TLShapeId,
@@ -417,22 +386,18 @@ export const TldrawComponent = () => {
     const textBoxWidth = 200;
     const textBoxHeight = 70;
 
-    // Check for collisions with other textboxes
     for (const otherId of shapes.textBoxes) {
       if (otherId === textBoxId) continue;
 
       const otherBox = editor.getShape(otherId);
       if (!otherBox) continue;
 
-      // Simple collision detection
       if (
         x < otherBox.x + textBoxWidth &&
         x + textBoxWidth > otherBox.x &&
         y < otherBox.y + textBoxHeight &&
         y + textBoxHeight > otherBox.y
       ) {
-        // Collision detected, adjust position
-        // Move in the direction away from the other box
         const centerX = x + textBoxWidth / 2;
         const centerY = y + textBoxHeight / 2;
         const otherCenterX = otherBox.x + textBoxWidth / 2;
@@ -441,7 +406,6 @@ export const TldrawComponent = () => {
         const dx = centerX - otherCenterX;
         const dy = centerY - otherCenterY;
 
-        // Normalize and apply offset
         const distance = Math.sqrt(dx * dx + dy * dy);
         const offsetX = (dx / distance) * textBoxWidth;
         const offsetY = (dy / distance) * textBoxHeight;
